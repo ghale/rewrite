@@ -17,6 +17,7 @@
 package org.openrewrite.java.cleanup
 
 import org.junit.jupiter.api.Test
+import org.openrewrite.Issue
 import org.openrewrite.Recipe
 import org.openrewrite.java.JavaParser
 import org.openrewrite.java.JavaRecipeTest
@@ -310,6 +311,48 @@ interface EmptyBlockTest : JavaRecipeTest {
                             System.out.println("this");
                         }
                     }
+                }
+            }
+        """
+    )
+
+    @Issue("https://github.com/openrewrite/rewrite/issues/1106")
+    @Test
+    fun invertEmptyIfWithElseClause(jp: JavaParser) = assertChanged(
+        jp,
+        before = """
+            class A {
+                void foo() {
+                    if(!somePredicate()) {
+                    } else {
+                        doSomethingWithSideEffects();
+                    }
+                    if(somePredicate()) {
+                    } else {
+                        doSomethingWithSideEffects();
+                    }
+                }
+                boolean somePredicate() {
+                    return true;
+                }
+                void doSomethingWithSideEffects() {
+                }
+            }
+        """,
+        after = """
+            class A {
+                void foo() {
+                    if(somePredicate()) {
+                        doSomethingWithSideEffects();
+                    }
+                    if(!somePredicate()) {
+                        doSomethingWithSideEffects();
+                    }
+                }
+                boolean somePredicate() {
+                    return true;
+                }
+                void doSomethingWithSideEffects() {
                 }
             }
         """

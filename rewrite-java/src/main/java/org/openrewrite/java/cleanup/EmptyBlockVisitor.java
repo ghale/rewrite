@@ -17,6 +17,7 @@ package org.openrewrite.java.cleanup;
 
 import lombok.EqualsAndHashCode;
 import lombok.Value;
+import org.openrewrite.ExecutionContext;
 import org.openrewrite.internal.ListUtils;
 import org.openrewrite.java.DeleteStatement;
 import org.openrewrite.java.JavaIsoVisitor;
@@ -171,6 +172,29 @@ public class EmptyBlockVisitor<P> extends JavaIsoVisitor<P> {
             }
 
             i = i.withIfCondition(cond);
+        } else {
+            Expression invertedCond;
+            if(cond.getTree() instanceof J.Unary && ((J.Unary)cond.getTree()).getOperator() == J.Unary.Type.Not) {
+                // It's already a unary negation, unwrap it to negate
+                invertedCond = ((J.Unary) cond.getTree()).getExpression();
+                if(invertedCond instanceof J.Parentheses) {
+                    //noinspection unchecked
+                    invertedCond = ((J.Parentheses<Expression>)invertedCond).getTree();
+                }
+            } else {
+                //
+                invertedCond = new J.Unary(
+                        randomId(),
+                        Space.EMPTY,
+                        cond.getTree().getMarkers(),
+                        new JLeftPadded<>(Space.EMPTY, J.Unary.Type.Not, Markers.EMPTY),
+                        new J.Parentheses<J>(randomId(), Space.EMPTY, Markers.EMPTY, JRightPadded.build(cond.getTree())),
+                        JavaType.Primitive.Boolean
+                );
+            }
+
+            i = i.withIfCondition(cond.withTree(invertedCond));
+
         }
 
         if (i.getElsePart() == null) {

@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:Suppress("DoubleNegation", "StatementWithEmptyBody", "PointlessBooleanExpression", "ConstantConditions",
+    "ClassInitializerMayBeStatic", "UnnecessaryLocalVariable", "ConditionCoveredByFurtherCondition", "DuplicateCondition")
 package org.openrewrite.java.cleanup
 
 import org.junit.jupiter.api.Test
@@ -259,7 +261,6 @@ interface SimplifyBooleanExpressionTest : JavaRecipeTest {
                 }
             }
         """,
-
     )
 
 }
