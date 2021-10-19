@@ -27,6 +27,7 @@ import org.openrewrite.maven.internal.MavenPomDownloader;
 import org.openrewrite.maven.tree.DependencyManagementDependency;
 import org.openrewrite.maven.tree.Maven;
 import org.openrewrite.maven.tree.Pom;
+import org.openrewrite.semver.DependencyMatcher;
 import org.openrewrite.semver.Semver;
 import org.openrewrite.semver.VersionComparator;
 import org.openrewrite.xml.AddToTagVisitor;
@@ -48,28 +49,13 @@ import static java.util.Collections.emptyMap;
 @EqualsAndHashCode(callSuper = true)
 public class UpgradeDependencyVersion extends Recipe {
 
-    @Option(displayName = "Group",
-            description = "The first part of a dependency coordinate `com.google.guava:guava:VERSION`. This can be a glob expression.",
-            example = "com.fasterxml.jackson*")
-    String groupId;
-
-    @Option(displayName = "Artifact",
-            description = "The second part of a dependency coordinate `com.google.guava:guava:VERSION`. This can be a glob expression.",
-            example = "jackson-module*")
-    String artifactId;
-
-    @Option(displayName = "New version",
-            description = "An exact version number, or node-style semver selector used to select the version number.",
-            example = "29.X")
-    String newVersion;
-
-    @Option(displayName = "Version pattern",
-            description = "Allows version selection to be extended beyond the original Node Semver semantics. So for example," +
-                    "Setting 'version' to \"25-29\" can be paired with a metadata pattern of \"-jre\" to select Guava 29.0-jre",
-            example = "-jre",
-            required = false)
-    @Nullable
-    String versionPattern;
+    @Option(displayName = "Dependency pattern",
+            description = "A dependency pattern specifying the groupId and artifactId of the dependency to upgrade, " +
+                    "and the version to be upgraded to. The groupId and artifactId may include glob patterns. " +
+                    "The version number may be an exact version number, or a node-style semver selector.",
+            example = "com.fasterxml.jackson*:jackson-module*:29.X"
+    )
+    String dependencyPattern;
 
     @Option(displayName = "Trust parent POM",
             description = "Even if the parent suggests a version that is older than what we are trying to upgrade to, trust it anyway. " +
@@ -83,8 +69,8 @@ public class UpgradeDependencyVersion extends Recipe {
     @Override
     public Validated validate() {
         Validated validated = super.validate();
-        if (newVersion != null) {
-            validated = validated.and(Semver.validate(newVersion, versionPattern));
+        if(dependencyPattern != null) {
+            validated = validated.and(DependencyMatcher.build(dependencyPattern));
         }
         return validated;
     }
@@ -101,7 +87,7 @@ public class UpgradeDependencyVersion extends Recipe {
     }
 
     @Override
-    protected TreeVisitor<?, ExecutionContext> getVisitor() {
+    protected MavenVisitor getVisitor() {
         return new UpgradeDependencyVersionVisitor();
     }
 
@@ -109,11 +95,11 @@ public class UpgradeDependencyVersion extends Recipe {
         @Nullable
         private Collection<String> availableVersions;
 
-        private final VersionComparator versionComparator;
+        private final DependencyMatcher dependencyMatcher;
 
         public UpgradeDependencyVersionVisitor() {
             //noinspection ConstantConditions
-            versionComparator = Semver.validate(newVersion, versionPattern).getValue();
+            dependencyMatcher = DependencyMatcher.build(dependencyPattern).getValue();
         }
 
         @Override
@@ -126,8 +112,7 @@ public class UpgradeDependencyVersion extends Recipe {
         private Pom maybeChangeDependencyVersion(Pom model, ExecutionContext ctx) {
             return model
                     .withDependencies(ListUtils.map(model.getDependencies(), dependency -> {
-                        if (StringUtils.matchesGlob(dependency.getGroupId(), groupId) &&
-                                StringUtils.matchesGlob(dependency.getArtifactId(), artifactId)) {
+                        if (dependencyMatcher.matches(dependency.getGroupId(), dependency.getArtifactId())) {
                             if (model.getParent() != null) {
                                 String managedVersion = model.getParent().getManagedVersion(dependency.getGroupId(), dependency.getArtifactId());
                                 if (managedVersion != null) {
@@ -145,8 +130,7 @@ public class UpgradeDependencyVersion extends Recipe {
                         return dependency;
                     }))
                     .withDependencyManagement(model.getDependencyManagement().withDependencies(ListUtils.map(model.getDependencyManagement().getDependencies(), dependency -> {
-                        if (StringUtils.matchesGlob(dependency.getGroupId(), groupId) &&
-                                StringUtils.matchesGlob(dependency.getArtifactId(), artifactId)) {
+                        if (dependencyMatcher.matches(dependency.getGroupId(), dependency.getArtifactId())) {
                             return findNewerDependencyVersion(dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion(), ctx)
                                     .map(newer -> {
                                         ChangeDependencyVersionVisitor changeDependencyVersion = new ChangeDependencyVersionVisitor(newer, dependency.getGroupId(), dependency.getArtifactId());
@@ -165,14 +149,14 @@ public class UpgradeDependencyVersion extends Recipe {
                 MavenMetadata mavenMetadata = new MavenPomDownloader(MavenPomCache.NOOP,
                         emptyMap(), ctx).downloadMetadata(groupId, artifactId, getCursor().firstEnclosingOrThrow(Maven.class).getModel().getEffectiveRepositories());
                 availableVersions = mavenMetadata.getVersioning().getVersions().stream()
-                        .filter(v -> versionComparator.isValid(currentVersion, v))
+                        .filter(v -> dependencyMatcher.isValidVersion(currentVersion, v))
                         .collect(Collectors.toList());
             }
-            return versionComparator.upgrade(currentVersion, availableVersions);
+            return dependencyMatcher.upgrade(currentVersion, availableVersions);
         }
     }
 
-    private class ChangeDependencyVersionVisitor extends MavenVisitor {
+    private static class ChangeDependencyVersionVisitor extends MavenVisitor {
         private final String newVersion;
         private final String groupId;
         private final String artifactId;

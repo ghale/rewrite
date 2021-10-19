@@ -24,15 +24,9 @@ import java.nio.file.Path
 
 class UpgradeDependencyVersionTest : MavenRecipeTest {
     @ParameterizedTest
-    @ValueSource(strings = ["com.google.guava:guava", "*:*"])
-    fun upgradeVersion(ga: String) = assertChanged(
-        recipe = UpgradeDependencyVersion(
-            ga.substringBefore(':'),
-            ga.substringAfter(':'),
-            "latest.patch",
-            null,
-            null
-        ),
+    @ValueSource(strings = ["com.google.guava:guava:latest.patch", "*:*:latest.patch"])
+    fun upgradeVersion(gav: String) = assertChanged(
+        recipe = UpgradeDependencyVersion(gav, null),
         before = """
             <project>
               <modelVersion>4.0.0</modelVersion>
@@ -71,13 +65,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
 
     @Test
     fun trustParent() = assertUnchanged(
-        recipe = UpgradeDependencyVersion(
-            "junit",
-            "junit",
-            "4.x",
-            null,
-            true
-        ),
+        recipe = UpgradeDependencyVersion("junit:junit:4.x", true),
         before = """
             <project>
               <modelVersion>4.0.0</modelVersion>
@@ -106,10 +94,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
     @Issue("https://github.com/openrewrite/rewrite/issues/739")
     fun upgradeVersionWithGroupIdAndArtifactIdDefinedAsProperty() = assertChanged(
         recipe = UpgradeDependencyVersion(
-            "io.quarkus",
-            "quarkus-universe-bom",
-            "1.13.7.Final",
-            null,
+            "io.quarkus:quarkus-universe-bom:1.13.7.Final",
             null
         ),
         before = """
@@ -200,21 +185,10 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
 
     @Test
     fun upgradeVersionSuccessively() = assertChanged(
-        recipe = UpgradeDependencyVersion(
-            "com.google.guava",
-            "*",
-            "28.x",
-            "-jre",
-            null
-        ).doNext(
-            UpgradeDependencyVersion(
-                "com.google.guava",
-                "*",
-                "29.x",
-                "-jre",
-                null
-            )
-        ),
+        recipe = UpgradeDependencyVersion("com.google.guava:*:28.x/-jre", null)
+            .doNext(
+                UpgradeDependencyVersion("com.google.guava:*:29.x/-jre",null)
+            ),
         before = """
             <project>
               <modelVersion>4.0.0</modelVersion>
@@ -254,13 +228,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
     @Test
     @Issue("https://github.com/openrewrite/rewrite/issues/565")
     fun handlesPropertiesInDependencyGroupIdAndArtifactId() = assertChanged(
-        recipe = UpgradeDependencyVersion(
-            "com.google.guava",
-            "*",
-            "latest.patch",
-            null,
-            null
-        ),
+        recipe = UpgradeDependencyVersion("com.google.guava:*:latest.patch", null),
         before = """
             <project>
                 <modelVersion>4.0.0</modelVersion>
@@ -312,10 +280,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
     @Test
     fun upgradeGuava() = assertChanged(
         recipe = UpgradeDependencyVersion(
-            "com.google.guava",
-            "*",
-            "25-28",
-            "-jre",
+            "com.google.guava:*:25-28/-jre",
             null
         ),
         before = """
@@ -405,10 +370,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
 
         assertChanged(
             recipe = UpgradeDependencyVersion(
-                "com.google.guava",
-                "*",
-                "25-28",
-                "-jre",
+                "com.google.guava:*:25-28/-jre",
                 null
             ),
             dependsOn = arrayOf(server.toFile()),
@@ -484,10 +446,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
         )
         assertChanged(
             recipe = UpgradeDependencyVersion(
-                "com.google.guava",
-                "*",
-                "25-28",
-                "-jre",
+                "com.google.guava:*:25-28/-jre",
                 null
             ),
             dependsOn = arrayOf(server.toFile()),
@@ -512,10 +471,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
     @Test
     fun upgradeDependencyHandlesDependencyManagement() = assertChanged(
         recipe = UpgradeDependencyVersion(
-            "io.micronaut",
-            "micronaut-bom",
-            "3.0.0-M5",
-            null,
+            "io.micronaut:micronaut-bom:3.0.0-M5",
             null
         ),
         before = """
@@ -620,10 +576,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
         )
         assertChanged(
             recipe = UpgradeDependencyVersion(
-                "io.micronaut",
-                "micronaut-bom",
-                "3.0.0-M5",
-                null,
+                "io.micronaut:micronaut-bom:3.0.0-M5",
                 null
             ),
             dependsOn = arrayOf(server.toFile()),
@@ -648,10 +601,7 @@ class UpgradeDependencyVersionTest : MavenRecipeTest {
     @Test
     fun upgradeToExactVersion() = assertChanged(
         recipe = UpgradeDependencyVersion(
-            "org.thymeleaf",
-            "thymeleaf-spring5",
-            "3.0.12.RELEASE",
-            null,
+            "org.thymeleaf:thymeleaf-spring5:3.0.12.RELEASE",
             null
         ),
         before = """
